@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Space Power — Press Tracker</title>
+<meta name="description" content="Space Power — press space, track score, compare with others. Simple, fast and reliable.">
+<style>
+  :root{--bg:#071023;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4}
+  [data-theme="light"]{--bg:#f4f7fb;--card:#ffffff;--muted:#5b6470;--accent:#067fbf;color:#0b1220}
+  [data-theme="rgb"]{--bg:linear-gradient(90deg,#ff4e50,#f9d423,#1fa2ff);--card:rgba(255,255,255,0.06);--muted:#fff;--accent:#fff;color:#fff}
+  body{margin:0;background:var(--bg);color:var(--color, #e6eef6);font-family:Inter,system-ui,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:18px}
+  .card{width:100%;max-width:720px;background:var(--card);padding:18px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+  h1{margin:0 0 10px;font-size:20px}
+  .row{display:flex;gap:10px;align-items:center}
+  input[type="text"]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+  #countBox{background:#fff;color:#000;padding:10px 18px;border-radius:10px;font-size:44px;min-width:80px;text-align:center;transition:width .12s;display:inline-block}
+  #spaceBtn{padding:14px 26px;border-radius:10px;background:var(--accent);color:#022;font-weight:700;border:none;cursor:pointer}
+  .controls{display:flex;gap:8px;margin-top:12px}
+  button{padding:10px 12px;border-radius:8px;border:none;cursor:pointer}
+  .hint{font-size:13px;color:var(--muted);margin-top:10px}
+  .modal-bg{position:fixed;inset:0;background:rgba(2,6,23,0.6);display:flex;align-items:center;justify-content:center;z-index:50}
+  .modal{background:var(--card);padding:16px;border-radius:10px;width:100%;max-width:420px;position:relative}
+  .close-x{position:absolute;top:8px;right:10px;background:transparent;border:0;color:var(--muted);font-weight:700;font-size:18px;cursor:pointer}
+  .error{color:#ff6b6b;font-size:13px;margin-top:6px;display:none}
+  .leaderboard{margin-top:12px;max-height:180px;overflow:auto}
+  .top-item{display:flex;justify-content:space-between;padding:6px 8px;border-radius:6px;margin-bottom:6px;background:linear-gradient(90deg,rgba(255,255,255,0.01),transparent)}
+  #resultModal .modal{max-width:680px}
+  @media(max-width:640px){#countBox{font-size:36px}}
+</style>
+</head>
+<body data-theme="dark">
+
+<div class="card" role="main" aria-label="Space Power">
+  <h1>Space Power</h1>
+
+  <!-- theme + optional settings -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="font-size:13px;color:var(--muted)">Theme</label>
+      <select id="themeSelect" style="padding:6px;border-radius:6px">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="rgb">RGB</option>
+      </select>
+    </div>
+    <div style="font-size:13px;color:var(--muted)">Space Power — press tracker</div>
+  </div>
+
+  <!-- name row -->
+  <div class="row">
+    <label style="min-width:70px;color:var(--muted)">Name</label>
+    <input id="mainName" placeholder="(optional) — enter to be in global top"/>
+    <button id="prefillBtn" title="Fill last named">Load last</button>
+  </div>
+
+  <div style="text-align:center;margin-top:18px">
+    <div id="countBox">0</div>
+  </div>
+
+  <div class="controls" style="justify-content:center;margin-top:12px">
+    <button id="spaceBtn">SPACE</button>
+    <button id="startBtn" style="background:#10b981;color:#012">Start</button>
+    <button id="endBtn" disabled style="background:#ef4444;color:#fff">End</button>
+  </div>
+
+  <div class="hint">Press the <strong>SPACE</strong> key or tap the SPACE button. Hold will NOT increase count — press repeatedly.</div>
+
+  <!-- local leaderboard preview -->
+  <div style="margin-top:14px">
+    <strong class="small">Local Top (named)</strong>
+    <div class="leaderboard" id="leaderboardPreview"></div>
+  </div>
+</div>
+
+<!-- Name Modal (only X allowed or Start with name) -->
+<div id="nameModal" class="modal-bg" style="display:flex">
+  <div class="modal" role="dialog">
+    <button class="close-x" id="modalX">✕</button>
+    <h3>Enter your name (optional)</h3>
+    <p style="font-size:13px;color:var(--muted)">If you want your score visible in global top-10, enter a name and press Start. Otherwise press ✕ to skip.</p>
+    <input id="modalInput" placeholder="Your name"/>
+    <div class="error" id="modalError">Please enter a name or press ✕ to skip.</div>
+    <div style="text-align:right;margin-top:10px">
+      <button id="modalStart" style="background:#10b981;color:#012;padding:8px 12px;border-radius:8px">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- result modal -->
+<div id="resultModal" class="modal-bg" style="display:none">
+  <div class="modal" role="dialog">
+    <button class="close-x" id="resultClose">✕</button>
+    <h3>Result</h3>
+    <div style="display:flex;gap:12px;flex-direction:column">
+      <div style="display:flex;justify-content:space-between"><div class="small">Name</div><div id="resName"></div></div>
+      <div style="display:flex;justify-content:space-between"><div class="small">Total presses</div><div id="resPresses"></div></div>
+      <div style="display:flex;justify-content:space-between"><div class="small">Time</div><div id="resTime"></div></div>
+      <div style="display:flex;justify-content:space-between"><div class="small">Your world rank</div><div id="resRank"></div></div>
+      <div style="margin-top:6px"><strong>Top 1–10 (named)</strong></div>
+      <div id="leaderboard" class="leaderboard"></div>
+      <canvas id="resultChart" style="margin-top:10px;display:none"></canvas>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+/* CONFIG */
+const API_ENDPOINT = ''; // optional: your server URL to POST final results
+const STORAGE_KEY = 'sp_submissions_v1';
+const QUEUE_KEY = 'sp_queue_v1';
+
+/* STATE */
+let playing=false, count=0, startTime=0, stamps=[], lastSpace=false;
+let lastSaveTs = 0;
+
+/* DOM */
+const modal = document.getElementById('nameModal');
+const modalX = document.getElementById('modalX');
+const modalInput = document.getElementById('modalInput');
+const modalStart = document.getElementById('modalStart');
+const modalError = document.getElementById('modalError');
+const mainName = document.getElementById('mainName');
+const prefillBtn = document.getElementById('prefillBtn');
+const countBox = document.getElementById('countBox');
+const spaceBtn = document.getElementById('spaceBtn');
+const startBtn = document.getElementById('startBtn');
+const endBtn = document.getElementById('endBtn');
+const leaderboardEl = document.getElementById('leaderboard');
+const leaderboardPreview = document.getElementById('leaderboardPreview');
+const resultModal = document.getElementById('resultModal');
+const resultClose = document.getElementById('resultClose');
+const resName = document.getElementById('resName');
+const resPresses = document.getElementById('resPresses');
+const resTime = document.getElementById('resTime');
+const resRank = document.getElementById('resRank');
+const themeSelect = document.getElementById('themeSelect');
+const resultChart = document.getElementById('resultChart');
+
+themeSelect.addEventListener('change', ()=> {
+  const v = themeSelect.value;
+  if(v==='dark') document.body.setAttribute('data-theme','dark');
+  else document.body.setAttribute('data-theme', v);
+});
+
+/* Helpers */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function loadSubmissions(){ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+function saveSubmissions(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+function enqueuePayload(payload){
+  const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+  q.push({payload, tries:0, nextTry: Date.now()});
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  processQueue();
+}
+
+/* queue sender: retries with exponential backoff */
+async function processQueue(){
+  if(!API_ENDPOINT) return; // no backend configured
+  const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+  if(!q.length) return;
+  const now = Date.now();
+  for(let i=0;i<q.length;i++){
+    const item = q[i];
+    if(item.nextTry > now) continue;
+    try {
+      // use sendBeacon if available for reliability on unload
+      if(navigator.sendBeacon){
+        const blob = new Blob([JSON.stringify(item.payload)], {type:'application/json'});
+        const ok = navigator.sendBeacon(API_ENDPOINT, blob);
+        if(ok){ q.splice(i,1); i--; continue; }
+      }
+      const resp = await fetch(API_ENDPOINT, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(item.payload),keepalive:true});
+      if(resp.ok){ q.splice(i,1); i--; continue; }
+      // else treat as failed
+      item.tries = (item.tries||0) + 1;
+      item.nextTry = Date.now() + Math.min(3600000, Math.pow(2, item.tries) * 1000); // cap 1hr
+    } catch(err){
+      item.tries = (item.tries||0) + 1;
+      item.nextTry = Date.now() + Math.min(3600000, Math.pow(2, item.tries) * 1000);
+    }
+  }
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  // schedule next run
+  setTimeout(processQueue, 5000);
+}
+
+/* Local leaderboard helpers */
+function getNamedSorted(){
+  const arr = loadSubmissions();
+  return arr.filter(x=>x.name && x.name!=='Anonymous').sort((a,b)=> b.presses - a.presses || a.duration_ms - b.duration_ms);
+}
+function updateLeaderboardPreview(){
+  const top = getNamedSorted().slice(0,5);
+  leaderboardPreview.innerHTML = '';
+  if(top.length===0){ leaderboardPreview.innerHTML = '<div style="color:var(--muted)">No named submissions yet</div>'; return; }
+  top.forEach((p,i)=>{
+    const div = document.createElement('div');
+    div.className='top-item';
+    div.innerHTML = `<div>#${i+1} ${escapeHtml(p.name)}</div><div>${p.presses}</div>`;
+    leaderboardPreview.appendChild(div);
+  });
+}
+
+/* Modal logic */
+modalInput.addEventListener('input', ()=> { modalError.style.display='none'; });
+modalStart.addEventListener('click', ()=>{
+  const v = modalInput.value.trim();
+  if(!v){ modalError.style.display='block'; return; }
+  mainName.value = v;
+  modal.style.display='none';
+  beginSession(v);
+});
+document.getElementById('modalX').addEventListener('click', ()=>{ modal.style.display='none'; beginSession('Anonymous'); });
+prefillBtn.addEventListener('click', ()=>{
+  const arr = loadSubmissions();
+  const last = arr.filter(x=>x.name && x.name!=='Anonymous').slice(-1)[0];
+  if(last) mainName.value = last.name;
+});
+
+/* Session control */
+function beginSession(name){
+  if(playing) return;
+  playing=true; count=0; stamps=[]; startTime=Date.now(); lastSpace=false;
+  countBox.textContent = '0';
+  endBtn.disabled = false;
+}
+startBtn.addEventListener('click', ()=> {
+  if(modal.style.display !== 'none') return; // force modal flow
+  const nm = (mainName.value.trim()||'Anonymous');
+  beginSession(nm);
+});
+
+/* Increment logic - strict press only */
+let lastClickTs=0;
+function increment(){
+  if(!playing) return;
+  const now = Date.now();
+  if(now - lastClickTs < 30) return; // tiny debounce to prevent spurious rapid increases
+  lastClickTs = now;
+  count++; countBox.textContent = String(count);
+  const width = Math.max(80, 60 + String(count).length * 18);
+  countBox.style.width = width + 'px';
+  stamps.push(Date.now() - startTime);
+  // periodic local save (every 5 sec) to avoid data loss
+  if(Date.now() - lastSaveTs > 5000){
+    lastSaveTs = Date.now();
+    // ephemeral save of current attempt in localStorage (optional)
+    localStorage.setItem('sp_current', JSON.stringify({name: mainName.value || 'Anonymous', count, stamps, startTime}));
+  }
+}
+
+spaceBtn.addEventListener('click', (e)=>{ e.preventDefault(); increment(); });
+document.addEventListener('keydown', e=>{
+  if((e.code==='Space' || e.key===' ') && !lastSpace){ e.preventDefault(); lastSpace = true; increment(); }
+});
+document.addEventListener('keyup', e=>{ if(e.code==='Space' || e.key===' ') lastSpace = false; });
+
+/* End logic */
+let chartInstance = null;
+endBtn.addEventListener('click', async ()=>{
+  if(!playing) return;
+  playing=false; endBtn.disabled = true;
+  const duration_ms = Date.now() - startTime;
+  const seconds = Math.floor(duration_ms/1000);
+  const timeText = Math.floor(seconds/60) + 'm ' + (seconds%60) + 's';
+  const player = (mainName.value.trim() || 'Anonymous');
+
+  // save to local storage only if named
+  if(player !== 'Anonymous'){
+    const arr = loadSubmissions();
+    arr.push({name: player, presses: count, duration_ms, ts: Date.now()});
+    saveSubmissions(arr);
+  } else {
+    // optionally save anonymous for session only
+  }
+
+  // compute rank among named players
+  let rankText = 'No rank (you skipped name)';
+  let rankNum = null;
+  if(player !== 'Anonymous'){
+    const named = getNamedSorted();
+    const higher = named.filter(x => x.presses > count).length;
+    const rank = higher + 1;
+    rankNum = rank;
+    rankText = `${rank} / ${named.length || 0}`;
+  }
+
+  // show motivational message for Top10 (no confetti)
+  if(rankNum && rankNum <= 10){
+    let msg = '';
+    if(rankNum === 1) msg = "🔥 Amazing! You're #1! Keep it up!";
+    else if(rankNum === 2) msg = "💪 Great job! You're #2! Almost at the top!";
+    else if(rankNum === 3) msg = "✨ Awesome! You're #3! Keep pushing!";
+    else msg = `🎉 Well done! You made Top10! You're #${rankNum}. Keep improving!`;
+    // show small in-page notice (instead of alert)
+    setTimeout(()=> alert(msg), 120); // alert quick
+  }
+
+  // show result modal
+  resName.textContent = player;
+  resPresses.textContent = String(count);
+  resTime.textContent = timeText;
+  resRank.textContent = rankText;
+
+  // top10 list
+  const top = getNamedSorted().slice(0,10);
+  leaderboardEl.innerHTML = '';
+  if(top.length===0) leaderboardEl.innerHTML = '<div style="color:var(--muted)">No named submissions yet.</div>';
+  else top.forEach((p,i)=>{ const d=document.createElement('div'); d.className='top-item'; d.innerHTML = `<div>#${i+1} ${escapeHtml(p.name)}</div><div>${p.presses}</div>`; leaderboardEl.appendChild(d); });
+
+  // chart
+  try {
+    resultChart.style.display = 'block';
+    const ctx = resultChart.getContext('2d');
+    if(chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    chartInstance = new Chart(ctx, { type:'line', data:{ labels: stamps.map((_,i)=>i+1), datasets:[{label:'ms since start',data:stamps,borderColor:'#06b6d4',backgroundColor:'rgba(6,182,212,0.12)',tension:0.25,fill:true}] }, options:{responsive:true,scales:{y:{beginAtZero:true}}} });
+  } catch(e){ /* chart fail silently */ }
+
+  resultModal.style.display = 'flex';
+
+  // enqueue to server if API exists (single write)
+  const payload = { name: player, presses: count, duration_ms, stamps, ts: Date.now() };
+  if(API_ENDPOINT){
+    try{ enqueuePayload(payload); } catch(e){ console.warn('enqueue failed', e); }
+    processQueue();
+  }
+  updateLeaderboardPreview();
+});
+
+/* close result */
+resultClose.addEventListener('click', ()=>{ resultModal.style.display='none'; count=0; countBox.textContent='0'; stamps=[]; endBtn.disabled=true; });
+
+/* auto process queue every 10s (if endpoint configured) */
+setInterval(processQueue, 10000);
+
+/* initial load preview */
+updateLeaderboardPreview();
+(function preload(){
+  const arr = loadSubmissions();
+  if(arr && arr.length>0){
+    const last = arr.filter(x=>x.name && x.name!=='Anonymous').slice(-1)[0];
+    if(last) mainName.value = last.name;
+  }
+})();
+</script>
+</body>
+</html>
